@@ -1,19 +1,29 @@
 name: Compose Checks
 
 on:
-  pull_request:
   push:
     branches: [ main ]
+  pull_request:
 
 jobs:
-  compose-config:
+  compose:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - name: Docker Set Up
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-      - name: Validate docker-compose.yml
+      - name: Prepare .env for Compose
+        run: |
+          if [ -f .env.example ]; then
+            cp .env.example .env
+          fi
+          echo "Created .env:"
+          sed 's/=.*/=<redacted>/' .env
+      - name: Show effective docker compose config
         run: docker compose -f docker-compose.yml config
+      - name: Validate docker-compose.yml
+        run: docker compose -f docker-compose.yml config > /dev/null
       - name: Build images (smoke)
         run: |
           docker compose build db redis api worker web
