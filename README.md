@@ -9,6 +9,5 @@ Monorepo for a Raidbots-like WoW simulation service.
 
 ## Dev (Docker)
 ```bash
-cd infra/compose
 docker compose up --build
 
