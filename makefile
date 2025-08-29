@@ -3,7 +3,7 @@ SHELL := /bin/bash
 .PHONY: dev down logs migrate seed fmt lint
 
 dev:
-	docker compose up --build
+	docker compose up --build -d
 
 down:
 	docker compose down

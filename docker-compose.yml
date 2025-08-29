@@ -1,5 +1,3 @@
-version: "3.9"
-
 name: simforge-dev
 
 services:
@@ -9,8 +7,6 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: simforge
-    ports:
-      - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -21,8 +17,6 @@ services:
 
   redis:
     image: redis:7-alpine
-    ports:
-      - "6379:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -31,15 +25,15 @@ services:
 
   api:
     build:
-      context: ./api
-      dockerfile: Dockerfile.dev
+      context: ./apps/api
+      dockerfile: Dockerfile
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     env_file: .env
     environment:
       DATABASE_URL: ${DATABASE_URL}
       REDIS_URL: ${REDIS_URL}
     volumes:
-      - ./api:/app
+      - ./apps/api:/app
     ports:
       - "8000:8000"
     depends_on:
@@ -48,22 +42,22 @@ services:
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8000/healthz || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8000/health || exit 1"]
       interval: 5s
       timeout: 3s
       retries: 20
 
   worker:
     build:
-      context: ./worker
-    dockerfile: Dockerfile.dev
+      context: ./apps/worker
+      dockerfile: Dockerfile.dev
     command: bash -lc "python -m celery -A worker_app worker --loglevel=info"
     env_file: .env
     environment:
       DATABASE_URL: ${DATABASE_URL}
       REDIS_URL: ${REDIS_URL}
     volumes:
-      - ./worker:/app
+      - ./apps/worker:/app
     depends_on:
       api:
         condition: service_healthy
@@ -72,14 +66,14 @@ services:
 
   web:
     build:
-      context: ./web
+      context: ./apps/web
       dockerfile: Dockerfile.dev
-    command: npm run dev -- --port 3000 --host
+    command: npm run dev -- -p 3000 -H 0.0.0.0
     env_file: .env
     environment:
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
     volumes:
-      - ./web:/app
+      - ./apps/web:/app
       - /app/node_modules
     ports:
       - "3000:3000"
