@@ -1,105 +1,96 @@
+version: "3.9"
+
+name: simforge-dev
+
 services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: simforge
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d simforge"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
   redis:
     image: redis:7-alpine
-    ports: ["6379:6379"]
+    ports:
+      - "6379:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       timeout: 3s
       retries: 10
-    restart: unless-stopped
-
-  postgres:
-    image: postgres:16-alpine
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER:-simforge}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-simforge}
-      POSTGRES_DB: ${POSTGRES_DB:-simforge}
-    ports: ["5432:5432"]
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-simforge} -d ${POSTGRES_DB:-simforge}"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-    restart: unless-stopped
-
-  minio:
-    image: minio/minio:latest
-    command: server /data --console-address ":9001"
-    environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minio}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minio123}
-    ports: ["9000:9000", "9001:9001"]
-    volumes:
-      - minio:/data
-    restart: unless-stopped
-
-  mc:
-    image: minio/mc
-    depends_on:
-      - minio
-    environment:
-      MC_HOST_local: http://$MINIO_ROOT_USER:$MINIO_ROOT_PASSWORD@minio:9000
-    command: ["mb", "-p", "local/simforge-artifacts"]
-    restart: "no"
 
   api:
     build:
-      context: ./apps/api
+      context: ./api
+      dockerfile: Dockerfile.dev
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    env_file: .env
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-simforge}:${POSTGRES_PASSWORD:-simforge}@postgres:5432/${POSTGRES_DB:-simforge}
-      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      DATABASE_URL: ${DATABASE_URL}
+      REDIS_URL: ${REDIS_URL}
+    volumes:
+      - ./api:/app
+    ports:
+      - "8000:8000"
     depends_on:
+      db:
+        condition: service_healthy
       redis:
         condition: service_healthy
-      postgres:
-        condition: service_healthy
-    ports: ["8000:8000"]
     healthcheck:
-      # Python ist im Image vorhanden → simpler HTTP-Check ohne curl/wget
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health').read()"]
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8000/healthz || exit 1"]
       interval: 5s
-      timeout: 5s
-      retries: 30
-    restart: unless-stopped
+      timeout: 3s
+      retries: 20
 
   worker:
     build:
-      context: ./apps/worker
+      context: ./worker
+    dockerfile: Dockerfile.dev
+    command: bash -lc "python -m celery -A worker_app worker --loglevel=info"
+    env_file: .env
     environment:
-      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      DATABASE_URL: ${DATABASE_URL}
+      REDIS_URL: ${REDIS_URL}
+    volumes:
+      - ./worker:/app
     depends_on:
+      api:
+        condition: service_healthy
       redis:
         condition: service_healthy
-    restart: unless-stopped
 
   web:
     build:
-      context: ./apps/web
+      context: ./web
+      dockerfile: Dockerfile.dev
+    command: npm run dev -- --port 3000 --host
+    env_file: .env
     environment:
-      NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8000}
-      NODE_ENV: production
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+    volumes:
+      - ./web:/app
+      - /app/node_modules
+    ports:
+      - "3000:3000"
     depends_on:
       api:
-        condition: service_started
-    ports: ["3000:3000"]
+        condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "wget -q -O- http://localhost:3000 >/dev/null 2>&1 || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 12
-    restart: unless-stopped
-
-  # scheduler:
-  #   image: python:3.12-slim
-  #   command: bash -lc "pip install --no-cache-dir rq-scheduler redis && rqscheduler --url ${REDIS_URL:-redis://redis:6379/0}"
-  #   depends_on:
-  #     redis:
-  #       condition: service_healthy
-  #   restart: unless-stopped
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000 >/dev/null 2>&1 || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
 
 volumes:
   pgdata:
-  minio:

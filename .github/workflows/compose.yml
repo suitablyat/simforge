@@ -1,0 +1,19 @@
+name: Compose Checks
+
+on:
+  pull_request:
+  push:
+    branches: [ main ]
+
+jobs:
+  compose-config:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Docker Set Up
+        uses: docker/setup-buildx-action@v3
+      - name: Validate docker-compose.yml
+        run: docker compose -f docker-compose.yml config
+      - name: Build images (smoke)
+        run: |
+          docker compose build db redis api worker web
