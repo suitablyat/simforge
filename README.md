@@ -1,37 +1,89 @@
-# Simforge
+# Simforge API
 
-Monorepo for a Raidbots-like WoW simulation service.
+This is the backend API for Simforge, built with [FastAPI](https://fastapi.tiangolo.com/).  
+It serves as the foundation for submitting and managing simulation jobs.
 
-## Apps
-- `apps/web` – Next.js + Tailwind
-- `apps/api` – FastAPI
-- `apps/worker` – Python RQ worker
+---
 
-## Local Development with Docker Compose
+## 🚀 Running Locally
 
-**Requirements:** Docker Desktop/Engine + Docker Compose v2
+### With Poetry or pip
+```bash
+cd apps/api
+uvicorn app.main:app --reload
+````
 
-1. Copy the example environment file:
+### With Docker (if `Dockerfile` present)
 
 ```bash
-cp .env.example .env
+docker build -t simforge-api .
+docker run -p 8000:8000 simforge-api
 ```
 
-2. Start the development environment:
+Or use `make dev` if you're running via `docker-compose`.
+
+---
+
+## ✅ Healthcheck
+
+Check if the API is live:
+
+```
+GET /health
+→ 200 OK: { "ok": true }
+```
+
+---
+
+## 📘 API Documentation
+
+* Swagger UI: [http://localhost:8000/docs](http://localhost:8000/docs)
+* Redoc: [http://localhost:8000/redoc](http://localhost:8000/redoc)
+* OpenAPI JSON: [http://localhost:8000/openapi.json](http://localhost:8000/openapi.json)
+
+---
+
+## 🎯 Available Endpoints (M0)
+
+### `POST /jobs`
+
+Creates a new job (stub). Example body:
+
+```json
+{
+  "note": "simulate rogue burst"
+}
+```
+
+Returns:
+
+```json
+{
+  "id": "uuid",
+  "status": "queued",
+  "note": "simulate rogue burst"
+}
+```
+
+---
+
+### `GET /jobs/{id}`
+
+Retrieves a previously submitted job by UUID.
+
+---
+
+## 🧪 Running Tests
 
 ```bash
-make dev
-# or alternatively:
-docker compose up --build
+cd apps/api
+pytest -q
 ```
 
-3. Verify that services are running:
+---
 
-* Web: [http://localhost:3000](http://localhost:3000)
-* API: [http://localhost:8000/healthz](http://localhost:8000/healthz)
-* Database: `localhost:5432` (user: `postgres`, password: `postgres`)
-* Redis: `localhost:6379`
+## 🗒️ Notes
 
-4. **Hot Reloading**
-
-* Changes in `./api`, `./web`, and `./worker` are reloaded automatically (`uvicorn --reload` / `npm run dev`).
+* Job data is stored **in-memory** and will reset on restart.
+* Root path `/` returns `404` by design (no landing page).
+* This structure will be extended in future milestones with DB, worker queue, etc.
