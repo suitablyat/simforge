@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 
-.PHONY: dev down logs migrate seed fmt lint \
+.PHONY: dev down logs mig-rev mig-up mig-down seed fmt lint \
         rebuild-web rebuild-all hard-reset clean-web-cache \
         health status ps restart
 
@@ -42,12 +42,14 @@ status:
 restart:
 	docker compose restart
 
-migrate:
-  docker compose exec api alembic upgrade head
-revision:
-  docker compose exec api alembic revision --autogenerate -m "$(m)"
-downgrade:
-  docker compose exec api alembic downgrade -1
+mig-rev:
+	docker compose exec api python -m alembic revision -m "$(m)" --autogenerate
+
+mig-up:
+	docker compose exec api python -m alembic upgrade head
+
+mig-down:
+	docker compose exec api python -m alembic downgrade -1
 
 seed:
 	@echo "TODO: seed"

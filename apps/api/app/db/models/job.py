@@ -1,11 +1,14 @@
 from sqlalchemy import Column, String, DateTime, Enum
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
-import uuid, enum
 from app.db.base import Base
+import uuid, enum
 
 class JobStatus(str, enum.Enum):
-    queued="queued"; running="running"; done="done"; failed="failed"
+    queued = "queued"
+    running = "running"
+    done = "done"
+    failed = "failed"
 
 class Job(Base):
     __tablename__ = "jobs"
