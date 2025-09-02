@@ -1,6 +1,9 @@
-fastapi==0.115.0
-uvicorn[standard]==0.30.5
+fastapi==0.116.1
+uvicorn[standard]==0.35
 SQLAlchemy>=2.0
 psycopg[binary]>=3.2
 redis>=5.0
 rq>=1.15
+alembic
+pydantic-settings
+pytest-asyncio

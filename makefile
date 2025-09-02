@@ -43,7 +43,11 @@ restart:
 	docker compose restart
 
 migrate:
-	@echo "TODO: migrations"
+  docker compose exec api alembic upgrade head
+revision:
+  docker compose exec api alembic revision --autogenerate -m "$(m)"
+downgrade:
+  docker compose exec api alembic downgrade -1
 
 seed:
 	@echo "TODO: seed"
