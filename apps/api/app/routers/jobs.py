@@ -3,7 +3,6 @@ from uuid import uuid4, UUID
 from app.routers import memory_store
 from app.schemas import Job, JobCreate
 
-
 router = APIRouter(prefix="/jobs", tags=["jobs"])
 
 @router.post("", response_model=Job, status_code=201)

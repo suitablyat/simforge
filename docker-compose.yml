@@ -7,6 +7,8 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: simforge
+    ports:
+      - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -25,8 +27,8 @@ services:
 
   api:
     build:
-      context: ./apps/api
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: apps/api/Dockerfile
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     env_file: .env
     environment:
@@ -42,10 +44,10 @@ services:
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8000/health || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8000/health || exit 1"]
       interval: 5s
       timeout: 3s
-      retries: 20
+      retries: 5
 
   worker:
     build:
