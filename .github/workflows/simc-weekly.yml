@@ -1,0 +1,95 @@
+name: Pin Weekly SimC
+
+on:
+  schedule:
+    - cron: "0 8 * * 1"
+  workflow_dispatch: {}
+
+jobs:
+  pick-and-build:
+    runs-on: ubuntu-latest
+    env:
+      REPO_NS: simulationcraftorg
+      REPO_NAME: simc
+      TZ: Europe/Berlin
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Pick first-of-week SimC tag (Europe/Berlin week)
+        id: pick
+        run: |
+          python - <<'PY'
+          import os, sys, requests, datetime, zoneinfo
+          NS=os.environ.get("REPO_NS"); NAME=os.environ.get("REPO_NAME")
+          tz=zoneinfo.ZoneInfo(os.environ.get("TZ","Europe/Berlin"))
+          now=datetime.datetime.now(tz)
+          # Wochenfenster [Mon 00:00, next Mon 00:00) in Berlin-Zeit
+          monday=(now - datetime.timedelta(days=now.weekday())).replace(hour=0,minute=0,second=0,microsecond=0)
+          next_monday=monday + datetime.timedelta(days=7)
+          start=monday.astimezone(datetime.timezone.utc)
+          end=next_monday.astimezone(datetime.timezone.utc)
+
+          def fetch_tags(page=1, page_size=100):
+            url=f"https://hub.docker.com/v2/repositories/{NS}/{NAME}/tags/?page_size={page_size}&page={page}&ordering=last_updated"
+            r=requests.get(url, timeout=30)
+            r.raise_for_status()
+            return r.json()
+
+          # Sammle ein paar Seiten, filtere auf diese Woche (UTC), ohne 'latest'
+          from dateutil.parser import isoparse
+          results=[]
+          page=1
+          while page<=5:
+            data=fetch_tags(page)
+            for it in data.get("results",[]):
+              name=it.get("name")
+              if name=="latest": 
+                continue
+              lu=isoparse(it.get("last_updated"))
+              if start <= lu < end:
+                results.append((lu, name))
+            if not data.get("next"):
+              break
+            page+=1
+
+          # Fallback: wenn leer, nimm Vorwoche (gleiches Verfahren)
+          if not results:
+            prev_start=start - datetime.timedelta(days=7)
+            prev_end=start
+            page=1
+            while page<=5:
+              data=fetch_tags(page)
+              for it in data.get("results",[]):
+                name=it.get("name")
+                if name=="latest": 
+                  continue
+                lu=isoparse(it.get("last_updated"))
+                if prev_start <= lu < prev_end:
+                  results.append((lu, name))
+              if not data.get("next"):
+                break
+              page+=1
+
+          if not results:
+            print("No suitable tags found.", file=sys.stderr)
+            sys.exit(1)
+
+          # Frühestes Datum der (aktuellen oder fallback) Woche
+          pick=min(results, key=lambda t: t[0])[1]
+          with open(os.environ["GITHUB_OUTPUT"],"a") as f:
+            f.write(f"simc_weekly_tag={pick}\n")
+          print("Picked weekly tag:", pick)
+          PY
+
+      - name: Build worker with weekly tag
+        run: |
+          docker build --platform=linux/amd64 \
+            -f apps/worker/Dockerfile \
+            --build-arg SIMC_WEEKLY_TAG=${{ steps.pick.outputs.simc_weekly_tag }} \
+            -t suitablyat/worker:weekly .
+
+      - name: Push (optional)
+        if: ${{ github.event_name != 'pull_request' }}
+        run: |
+          echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u "${{ secrets.DOCKERHUB_USER }}" --password-stdin
+          docker push suitablyat/worker:weekly
