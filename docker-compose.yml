@@ -7,8 +7,6 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: simforge
-    ports:
-      - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -31,9 +29,6 @@ services:
       dockerfile: apps/api/Dockerfile
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     env_file: .env
-    environment:
-      DATABASE_URL: ${DATABASE_URL}
-      REDIS_URL: ${REDIS_URL}
     volumes:
       - ./apps/api:/app
     ports:
@@ -50,16 +45,21 @@ services:
       retries: 5
 
   worker:
+    platform: linux/amd64
     build:
-      context: ./apps/worker
-      dockerfile: Dockerfile.dev
-    command: bash -lc "python -m celery -A worker_app worker --loglevel=info"
+      context: .
+      dockerfile: apps/worker/Dockerfile
+    entrypoint: []
+    command: [ "python", "-m", "worker.main" ]
     env_file: .env
-    environment:
-      DATABASE_URL: ${DATABASE_URL}
-      REDIS_URL: ${REDIS_URL}
     volumes:
       - ./apps/worker:/app
+    healthcheck:
+      test: ["CMD", "/opt/simc/nightly/simc", "version=1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     depends_on:
       api:
         condition: service_healthy
@@ -72,8 +72,6 @@ services:
       dockerfile: Dockerfile.dev
     command: npm run dev -- -p 3000 -H 0.0.0.0
     env_file: .env
-    environment:
-      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
     volumes:
       - ./apps/web:/app
       - /app/node_modules

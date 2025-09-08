@@ -1,14 +1,18 @@
 import os
-from rq import Worker, Queue
-import redis
+from rq import Worker, Queue, Connection
+from redis import Redis
+from .settings import settings
+from . import jobs  # noqa: F401 ensures import
 
-redis_url = os.getenv("REDIS_URL", "redis://redis:6379/0")
-listen = ['default']
+listen = ["default", "sims"]
 
-conn = redis.from_url(redis_url)
+def get_connection():
+    return Redis.from_url(settings.redis_url)
 
-if __name__ == '__main__':
-    # Übergib die Connection explizit
-    worker = Worker([Queue(name, connection=conn) for name in listen], connection=conn)
-    worker.work()
+def main():
+    with Connection(get_connection()):
+        worker = Worker(map(Queue, listen))
+        worker.work(with_scheduler=True)
 
+if __name__ == "__main__":
+    main()
